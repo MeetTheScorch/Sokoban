@@ -53,6 +53,23 @@ bool Menu::loadContent()
 		singleMenuText.push_back(t);
 	}
 
+	std::vector<sf::String> multiText = {"Multi-player", "Host game", "Join game", "Back"};
+	for (auto i = 0u; i < multiText.size(); i++)
+	{
+		sf::Text t;
+		t.setFont(font);
+		if (i == 0)
+		{
+			t.setCharacterSize(50);
+		}
+		else
+		{
+			t.setCharacterSize(30);
+		}
+		t.setString(multiText[i]);
+		multiMenuText.push_back(t);
+	}
+
 	std::vector<sf::String> inGameText = {"Back", "Restart", "Menu"};
 	for (auto i = 0u; i < inGameText.size(); i++)
 	{
@@ -94,7 +111,7 @@ std::vector<sf::Text> Menu::getMenuText()
 		return this->singleMenuText;
 		break;
 	case MenuState::MULTI:
-		return this->singleMenuText;
+		return this->multiMenuText;
 		break;
 	case MenuState::INGAME:
 		return this->inGameMenuText;
@@ -116,7 +133,7 @@ void Menu::setMenuTextPosition(int i, float x, float y)
 		this->singleMenuText[i].setPosition(x, y);
 		break;
 	case MenuState::MULTI:
-		this->singleMenuText[i].setPosition(x, y);
+		this->multiMenuText[i].setPosition(x, y);
 		break;
 	case MenuState::INGAME:
 		this->inGameMenuText[i].setPosition(x, y);
@@ -138,7 +155,7 @@ void Menu::setMenuTextFillColor(int i, sf::Color color)
 		this->singleMenuText[i].setFillColor(color);
 		break;
 	case MenuState::MULTI:
-		this->singleMenuText[i].setFillColor(color);
+		this->multiMenuText[i].setFillColor(color);
 		break;
 	case MenuState::INGAME:
 		this->inGameMenuText[i].setFillColor(color);

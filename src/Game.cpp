@@ -170,7 +170,7 @@ void Game::showMenu()
 			menuSingle();
 			break;
 		case Menu::MenuState::MULTI:
-			menuSingle();
+			menuMulti();
 			break;
 		case Menu::MenuState::INGAME:
 			menuInGame();
@@ -221,7 +221,7 @@ void Game::menuMain()
 					 event.type == sf::Event::MouseButtonReleased &&
 					 event.mouseButton.button == sf::Mouse::Left)
 			{
-				menu->setMenuState(Menu::MenuState::SINGLE);
+				menu->setMenuState(Menu::MenuState::MULTI);
 			}
 			else if (menu->getMenuText()[3].getGlobalBounds().contains(mouse) &&
 					 event.type == sf::Event::MouseButtonReleased &&
@@ -232,12 +232,14 @@ void Game::menuMain()
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 0, previousSizeY = 0;
+		int positionX, positionY = 0;
 		for (auto i = 0u; i < menu->getMenuText().size(); i++)
 		{
 			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-			positionY += previousSizeY + 30;
-			previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
+			if (i == 1)
+				positionY += 70;
+			else
+				positionY += 50;
 
 			menu->setMenuTextPosition(
 				i,
@@ -323,6 +325,7 @@ void Game::menuSingle()
 			{
 				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
 				positionY += previousSizeY + 30;
+				//poprawic
 				previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
 			}
 			else
@@ -365,6 +368,71 @@ void Game::menuSingle()
 
 void Game::menuMulti()
 {
+	//std::vector<sf::String> multiText = {"Host game", "Join game", "Back"};
+	while (getWindow().isOpen() &&
+		   state == GameState::MENU &&
+		   menu->getMenuState() == Menu::MenuState::MULTI)
+	{
+		sf::Vector2f mouse(sf::Mouse::getPosition(window));
+		sf::Event event;
+		while (getWindow().pollEvent(event))
+		{
+			if (event.type == sf::Event::Closed)
+			{
+				closeGame();
+			}
+
+			if (event.type == sf::Event::KeyPressed &&
+				event.key.code == sf::Keyboard::Escape)
+			{
+				menu->setMenuState(Menu::MenuState::MAIN);
+			}
+			else if (menu->getMenuText()[1].getGlobalBounds().contains(mouse) &&
+					 event.type == sf::Event::MouseButtonReleased &&
+					 event.mouseButton.button == sf::Mouse::Left)
+			{
+				//host
+			}
+			else if (menu->getMenuText()[2].getGlobalBounds().contains(mouse) &&
+					 event.type == sf::Event::MouseButtonReleased &&
+					 event.mouseButton.button == sf::Mouse::Left)
+			{
+				//join
+			}
+			else if (menu->getMenuText()[3].getGlobalBounds().contains(mouse) &&
+					 event.type == sf::Event::MouseButtonReleased &&
+					 event.mouseButton.button == sf::Mouse::Left)
+			{
+				menu->setMenuState(Menu::MenuState::MAIN);
+			}
+		}
+
+		getWindow().clear();
+		int positionX, positionY = 0;
+		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		{
+			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+			if (i == 1)
+				positionY += 70;
+			else
+				positionY += 50;
+
+			menu->setMenuTextPosition(
+				i,
+				positionX,
+				positionY);
+			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
+			{
+				menu->setMenuTextFillColor(i, sf::Color::Red);
+			}
+			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
+			{
+				menu->setMenuTextFillColor(i, sf::Color::Green);
+			}
+			window.draw(menu->getMenuText()[i]);
+		}
+		getWindow().display();
+	}
 }
 
 void Game::menuInGame()
@@ -414,6 +482,7 @@ void Game::menuInGame()
 		{
 			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
 			positionY += previousSizeY + 30;
+			//poprawic
 			previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
 
 			menu->setMenuTextPosition(
@@ -480,6 +549,7 @@ void Game::menuFinish()
 			{
 				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
 				positionY += previousSizeY + 30;
+				//poprawic
 				previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
 
 				menu->setMenuTextPosition(
