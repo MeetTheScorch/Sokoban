@@ -1,6 +1,6 @@
 #include "Game.hpp"
 
-Game::Game() : window(sf::VideoMode(800, 600), "Sokoban", sf::Style::Close)
+Game::Game() : window(sf::VideoMode(1024, 768), "Sokoban", sf::Style::Close)
 {
 	this->state = GameState::START;
 	loadContent();
