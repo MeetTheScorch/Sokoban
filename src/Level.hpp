@@ -24,8 +24,9 @@ class Level
 	std::vector<std::pair<int, int>> getCratesPositions() { return this->cratesPositions; }
 
   private:
-	int sizeX, sizeY;
-	std::string name, path;
+	int sizeX, sizeY;	//Rozmiary poziomu
+	std::string name;	//Nazwa poziomu
+	std::string path;	//Sciezka do poziomu
 	std::vector<std::vector<int>> map;
 	std::vector<std::pair<int, int>> playersPositions;
 	std::vector<std::pair<int, int>> targetsPositions;

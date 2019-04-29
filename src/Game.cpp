@@ -45,19 +45,24 @@ Game::~Game()
 	delete level;
 }
 
+/*Wczytywanie zasobow.*/
 bool Game::loadContent()
 {
 	this->textureSize = 32;
-	loadTexture("WallTexture", "content/wall.bmp");
-	loadTexture("FloorTexture", "content/floor.bmp");
-	loadTexture("TargetTexture", "content/target.bmp");
-	loadTexture("CrateTexture", "content/crate.bmp");
-	loadTexture("PlayerTexture", "content/player.bmp");
+	loadTexture("WallTexture", "content/wall.png");
+	loadTexture("FloorTexture", "content/floor.png");
+	loadTexture("TargetTexture", "content/target.png");
+	loadTexture("CrateTexture", "content/crate.png");
+	loadTexture("PlayerTextureGreen", "content/player-green.png");
+	loadTexture("PlayerTextureRed", "content/player-red.png");
+	loadTexture("PlayerTextureBlue", "content/player-blue.png");
+
 	font.loadFromFile("content/Anton-Regular.ttf");
 
 	return true;
 }
 
+/*Tworzenie poziomu.*/
 void Game::buildLevel(const std::string &name)
 {
 	//W przypadku gdy level, players, targets i crates istnieja, nalezy je wyczyscic
@@ -110,7 +115,25 @@ void Game::buildLevel(const std::string &name)
 
 	for (auto p : level->getPlayersPositions())
 	{
-		player = new Player(p.first, p.second, textureSize, getTexture("PlayerTexture"));
+		if (level->getPlayersPositions().size() == 1)
+		{
+			player = new Player(p.first, p.second, textureSize, getTexture("PlayerTextureGreen"));
+		}
+		else
+		{
+			switch (players.size())
+			{
+			case 0:
+				player = new Player(p.first, p.second, textureSize, getTexture("PlayerTextureRed"));
+				break;
+			case 1:
+				player = new Player(p.first, p.second, textureSize, getTexture("PlayerTextureBlue"));
+				break;
+			default:
+				player = new Player(p.first, p.second, textureSize, getTexture("PlayerTextureGreen"));
+				break;
+			}
+		}
 		players.push_back(player);
 	}
 
@@ -132,6 +155,7 @@ void Game::buildLevel(const std::string &name)
 	window.setView(gameView);
 }
 
+/*Glowna petla aplikacji.*/
 void Game::run()
 {
 	while (state != GameState::CLOSE)
@@ -157,6 +181,7 @@ void Game::run()
 	}
 }
 
+/*Wyswietlanie odpowiedniego menu.*/
 void Game::showMenu()
 {
 	while (state == GameState::MENU)
@@ -178,10 +203,20 @@ void Game::showMenu()
 		case Menu::MenuState::FINISH:
 			menuFinish();
 			break;
+		case Menu::MenuState::HOST:
+			menuHost();
+			break;
+		case Menu::MenuState::JOIN:
+			menuJoin();
+			break;
+		case Menu::MenuState::LOBBY:
+			menuLobby();
+			break;
 		}
 	}
 }
 
+/**/
 void Game::closeGame()
 {
 	std::cout << "closing" << std::endl;
@@ -191,7 +226,7 @@ void Game::closeGame()
 
 //------------------------Rysowanie i obsluga Menu------------------------//
 
-//Rysowanie i obsluga glownego menu gry (MAIN)
+/*Rysowanie i obsluga glownego menu gry (MAIN).*/
 void Game::menuMain()
 {
 	while (getWindow().isOpen() &&
@@ -259,7 +294,7 @@ void Game::menuMain()
 	}
 }
 
-//Rysowanie i obsluga menu wyboru poziomu (START)
+/*Rysowanie i obsluga menu wyboru poziomu (START).*/
 void Game::menuSingle()
 {
 	page = 0;
@@ -298,6 +333,12 @@ void Game::menuSingle()
 					page++;
 				}
 			}
+			else if (menu->getMenuText()[menu->getMenuText().size() - 1].getGlobalBounds().contains(mouse) &&
+					 event.type == sf::Event::MouseButtonReleased &&
+					 event.mouseButton.button == sf::Mouse::Left)
+			{
+				menu->setMenuState(Menu::MenuState::MAIN);
+			}
 			else
 			{
 				for (auto i = 0u; i < 5; i++)
@@ -318,10 +359,10 @@ void Game::menuSingle()
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 0, previousSizeY = 0;
+		int positionX = 0, positionY = 0, previousSizeY = 0;
 		for (auto i = 0u; i < menu->getMenuText().size(); i++)
 		{
-			if (i == 0 || ((i >= (page * 5) + 3) && (i < ((page + 1) * 5) + 3)))
+			if (i == 0 || ((i >= (page * 5) + 3) && (i < ((page + 1) * 5) + 3)) || i == menu->getMenuText().size() - 1)
 			{
 				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
 				positionY += previousSizeY + 30;
@@ -330,12 +371,12 @@ void Game::menuSingle()
 			}
 			else
 			{
-				if (i == 1)
+				if (i == 1) //Przycisk previous 5
 				{
 					positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width - 50;
 					positionY += previousSizeY + 30;
 				}
-				else
+				else if (i == 2) //Przycisk next 5
 				{
 					positionX = window.getSize().x / 2 + 50;
 					previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
@@ -344,7 +385,8 @@ void Game::menuSingle()
 			if (i == 0 ||
 				(i == 1 && page > 0) ||
 				(i == 2 && page < ((menu->getMenuText().size() - 4) / 5)) ||
-				((i >= (page * 5) + 3) && (i < ((page + 1) * 5) + 3)))
+				((i >= (page * 5) + 3) && (i < ((page + 1) * 5) + 3)) ||
+				i == menu->getMenuText().size() - 1)
 			{
 				menu->setMenuTextPosition(
 					i,
@@ -366,6 +408,7 @@ void Game::menuSingle()
 	}
 }
 
+/**/
 void Game::menuMulti()
 {
 	//std::vector<sf::String> multiText = {"Host game", "Join game", "Back"};
@@ -391,13 +434,13 @@ void Game::menuMulti()
 					 event.type == sf::Event::MouseButtonReleased &&
 					 event.mouseButton.button == sf::Mouse::Left)
 			{
-				//host
+				menu->setMenuState(Menu::MenuState::HOST);
 			}
 			else if (menu->getMenuText()[2].getGlobalBounds().contains(mouse) &&
 					 event.type == sf::Event::MouseButtonReleased &&
 					 event.mouseButton.button == sf::Mouse::Left)
 			{
-				//join
+				menu->setMenuState(Menu::MenuState::JOIN);
 			}
 			else if (menu->getMenuText()[3].getGlobalBounds().contains(mouse) &&
 					 event.type == sf::Event::MouseButtonReleased &&
@@ -435,6 +478,7 @@ void Game::menuMulti()
 	}
 }
 
+/**/
 void Game::menuInGame()
 {
 	while (getWindow().isOpen() &&
@@ -503,6 +547,7 @@ void Game::menuInGame()
 	}
 }
 
+/**/
 void Game::menuFinish()
 {
 	while (getWindow().isOpen() &&
@@ -571,8 +616,192 @@ void Game::menuFinish()
 	}
 }
 
+/**/
+void Game::menuHost()
+{
+	while (getWindow().isOpen() &&
+		   state == GameState::MENU &&
+		   menu->getMenuState() == Menu::MenuState::HOST)
+	{
+		sf::Vector2f mouse(sf::Mouse::getPosition(window));
+		sf::Event event;
+		while (getWindow().pollEvent(event))
+		{
+			if (event.type == sf::Event::Closed)
+			{
+				closeGame();
+			}
+			if (event.type == sf::Event::KeyPressed &&
+				event.key.code == sf::Keyboard::Escape)
+			{
+				menu->setMenuState(Menu::MenuState::MAIN);
+			}
+		}
+
+		getWindow().clear();
+		int positionX, positionY = 0;
+		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		{
+			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+			if (i == 1)
+				positionY += 70;
+			else
+				positionY += 50;
+
+			menu->setMenuTextPosition(
+				i,
+				positionX,
+				positionY);
+			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0 || i == 1)
+			{
+				menu->setMenuTextFillColor(i, sf::Color::Red);
+			}
+			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0 && i != 1)
+			{
+				menu->setMenuTextFillColor(i, sf::Color::Green);
+			}
+			window.draw(menu->getMenuText()[i]);
+		}
+		getWindow().display();
+	}
+}
+
+/**/
+void Game::menuJoin()
+{
+	while (getWindow().isOpen() &&
+		   state == GameState::MENU &&
+		   menu->getMenuState() == Menu::MenuState::JOIN)
+	{
+		sf::Vector2f mouse(sf::Mouse::getPosition(window));
+		sf::Event event;
+		while (getWindow().pollEvent(event))
+		{
+			if (event.type == sf::Event::Closed)
+			{
+				closeGame();
+			}
+			if (event.type == sf::Event::KeyPressed &&
+				event.key.code == sf::Keyboard::Escape)
+			{
+				menu->setMenuState(Menu::MenuState::MAIN);
+			}
+		}
+
+		getWindow().clear();
+		int positionX, positionY = 0;
+		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		{
+			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+			if (i == 1)
+				positionY += 70;
+			else
+				positionY += 50;
+
+			menu->setMenuTextPosition(
+				i,
+				positionX,
+				positionY);
+			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0 || i == 1)
+			{
+				menu->setMenuTextFillColor(i, sf::Color::Red);
+			}
+			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0 && i != 1)
+			{
+				menu->setMenuTextFillColor(i, sf::Color::Green);
+			}
+			window.draw(menu->getMenuText()[i]);
+		}
+		getWindow().display();
+	}
+}
+
+/**/
+void Game::menuLobby()
+{
+	while (getWindow().isOpen() &&
+		   state == GameState::MENU &&
+		   menu->getMenuState() == Menu::MenuState::LOBBY)
+	{
+		sf::Vector2f mouse(sf::Mouse::getPosition(window));
+		sf::Event event;
+		while (getWindow().pollEvent(event))
+		{
+			if (event.type == sf::Event::Closed)
+			{
+				closeGame();
+			}
+			if (event.type == sf::Event::KeyPressed &&
+				event.key.code == sf::Keyboard::Escape)
+			{
+				menu->setMenuState(Menu::MenuState::MAIN);
+			}
+		}
+
+		getWindow().clear();
+		int positionX, positionY = 0;
+		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		{
+			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+			if (i == 1)
+				positionY += 70;
+			else
+				positionY += 50;
+
+			menu->setMenuTextPosition(
+				i,
+				positionX,
+				positionY);
+			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0 || i == 1)
+			{
+				menu->setMenuTextFillColor(i, sf::Color::Red);
+			}
+			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0 && i != 1)
+			{
+				menu->setMenuTextFillColor(i, sf::Color::Green);
+			}
+			window.draw(menu->getMenuText()[i]);
+		}
+		getWindow().display();
+	}
+}
+
+//------------------------Laczenie multiplayer------------------------//
+
+/*Funkcja czeka az klient nawiaze polaczenie.*/
+void Game::waitForClient()
+{
+	socket = new sf::TcpSocket();
+	sf::TcpListener listener;
+	listener.listen(PORT);
+	listener.accept(*socket);
+	//socket->getRemoteAddress()
+	connected = true;
+}
+
+/*Laczenie z hostem.*/
+bool Game::connectToHost(const std::string &address)
+{
+	sf::IpAddress IPAddress(address);
+	socket = new sf::TcpSocket();
+	auto result = socket->connect(IPAddress, PORT, sf::Time(sf::seconds(15)));
+	if(result == sf::Socket::Done)
+	{
+		connected = true;
+		//puszczanie thread z recieveMessage
+		menu->setMenuState(Menu::MenuState::LOBBY);
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+
+}
+
 //------------------------Rysowanie i obsluga Gry------------------------//
 
+/*Obsluga gry.*/
 void Game::showGame()
 {
 	while (getWindow().isOpen() && state == GameState::GAME)
@@ -625,6 +854,7 @@ void Game::showGame()
 	}
 }
 
+/*Rysowanie gry.*/
 void Game::drawGame()
 {
 	for (auto y = 0; y < level->getSizeY(); y++)
@@ -652,14 +882,17 @@ void Game::drawGame()
 	window.setView(gameView);
 }
 
+//------------------------Dodatkowe funkcje------------------------//
+
+/**/
 void Game::move(int moveX, int moveY)
 {
 	player->move(moveX, moveY);
 }
 
-//test na kolizje - zwraca true jezeli nie da sie wejsc na pole, w przeciwnym wypadku false
-//na dane pole mozna wejsc, jezeli jest puste, badz jezeli obiekt zajmujacy dane pole mozna
-//mozna przesunac na nastepne pole
+/*Test na kolizje - zwraca true jezeli nie da sie wejsc na pole, w przeciwnym wypadku false.
+Na dane pole mozna wejsc, jezeli jest puste, badz jezeli obiekt zajmujacy dane pole mozna
+przesunac na nastepne pole.*/
 bool Game::checkColission(int moveX, int moveY, bool playerFlag)
 {
 	int posX = player->getPositionX(), posY = player->getPositionY();
@@ -704,6 +937,7 @@ bool Game::checkColission(int moveX, int moveY, bool playerFlag)
 	return true;
 }
 
+/*Checks whether all targets are covered by crates.*/
 bool Game::checkFinish()
 {
 	unsigned count = 0;
@@ -721,6 +955,7 @@ bool Game::checkFinish()
 	return false;
 }
 
+/**/
 bool Game::checkNextLevel()
 {
 	std::map<std::string, std::string>::iterator it = Data::getInstance().getLevels().find(currentLevelName);
@@ -731,6 +966,7 @@ bool Game::checkNextLevel()
 	return false;
 }
 
+/*If texturesCollector doesn't contain texture with textureName then loads it from file using texturePath.*/
 void Game::loadTexture(const std::string &textureName, const std::string &texturePath)
 {
 	auto textureIterator = texturesCollector.find(textureName);
@@ -742,6 +978,8 @@ void Game::loadTexture(const std::string &textureName, const std::string &textur
 	}
 }
 
+/*If texturesCollector contains texture with textureName then returns it.
+Otherwise returns nullptr.*/
 sf::Texture *Game::getTexture(const std::string &textureName)
 {
 	auto textureIterator = texturesCollector.find(textureName);
@@ -750,4 +988,19 @@ sf::Texture *Game::getTexture(const std::string &textureName)
 		return nullptr;
 	}
 	return textureIterator->second;
+}
+
+void Game::sendMessage()
+{
+	//
+}
+
+void Game::recieveMessage()
+{
+	//
+}
+
+void Game::addMessage(const std::string &)
+{
+	//
 }

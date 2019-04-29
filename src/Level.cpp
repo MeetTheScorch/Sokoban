@@ -4,6 +4,7 @@ Level::Level() {}
 
 Level::~Level() {}
 
+/*Wczytywanie poziomu o nazwie name z pliku.*/
 bool Level::loadContent(const std::string &name)
 {
 	setLevelName(name);
