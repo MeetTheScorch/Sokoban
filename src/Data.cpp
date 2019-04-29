@@ -8,7 +8,11 @@ Data &Data::getInstance()
 	return instance;
 }
 
-Data::~Data() {}
+Data::~Data()
+{
+	singleplayerLevels.clear();
+	multiplayerLevels.clear();
+}
 
 bool Data::loadContent()
 {

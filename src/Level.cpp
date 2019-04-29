@@ -2,7 +2,13 @@
 
 Level::Level() {}
 
-Level::~Level() {}
+Level::~Level()
+{
+	map.clear();
+	playersPositions.clear();
+	targetsPositions.clear();
+	cratesPositions.clear();
+}
 
 /*Wczytywanie poziomu o nazwie name z pliku.*/
 bool Level::loadContent(const std::string &name)

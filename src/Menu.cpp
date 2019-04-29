@@ -6,7 +6,17 @@ Menu::Menu(sf::Font &font)
 	state = MenuState::MAIN;
 }
 
-Menu::~Menu() {}
+Menu::~Menu()
+{
+	mainMenuText.clear();
+	singleMenuText.clear();
+	multiMenuText.clear();
+	inGameMenuText.clear();
+	finishMenuText.clear();
+	hostMenuText.clear();
+	joinMenuText.clear();
+	lobbyMenuText.clear();
+}
 
 /*Tworzenie tekstu dla kazdego menu.*/
 bool Menu::loadContent()
@@ -123,7 +133,7 @@ bool Menu::loadContent()
 		hostMenuText.push_back(t);
 	}
 
-	std::vector<sf::String> joinText = {"Join game", "Type IP address:", "Menu"};
+	std::vector<sf::String> joinText = {"Join game", "Type IP address:", "", "Join", "Menu"};
 	for (auto i = 0u; i < joinText.size(); i++)
 	{
 		sf::Text t;
@@ -161,7 +171,7 @@ bool Menu::loadContent()
 }
 
 /*Funkcja zwraca odpowiednie menu w zaleznosci od zmiennej state.*/
-std::vector<sf::Text> Menu::getMenuText()
+std::vector<sf::Text> &Menu::getMenuText()
 {
 	switch (state)
 	{
@@ -195,7 +205,9 @@ std::vector<sf::Text> Menu::getMenuText()
 /*Ustawianie pozycji tekstu.*/
 void Menu::setMenuTextPosition(int i, float x, float y)
 {
-	switch (state)
+	getMenuText()[i].setPosition(x, y);
+
+	/*switch (state)
 	{
 	case MenuState::MAIN:
 		this->mainMenuText[i].setPosition(x, y);
@@ -221,13 +233,15 @@ void Menu::setMenuTextPosition(int i, float x, float y)
 	case MenuState::LOBBY:
 		this->lobbyMenuText[i].setPosition(x, y);
 		break;
-	}
+	}*/
 }
 
 /*Ustawianie koloru tekstu.*/
 void Menu::setMenuTextFillColor(int i, sf::Color color)
 {
-	switch (state)
+	getMenuText()[i].setFillColor(color);
+
+	/*switch (state)
 	{
 	case MenuState::MAIN:
 		this->mainMenuText[i].setFillColor(color);
@@ -253,5 +267,38 @@ void Menu::setMenuTextFillColor(int i, sf::Color color)
 	case MenuState::LOBBY:
 		this->lobbyMenuText[i].setFillColor(color);
 		break;
-	}
+	}*/
+}
+
+void Menu::setMenuTextString(int i, const std::string &str)
+{
+	getMenuText()[i].setString(str);
+
+	/*switch (state)
+	{
+	case MenuState::MAIN:
+		this->mainMenuText[i].setString(str);
+		break;
+	case MenuState::SINGLE:
+		this->singleMenuText[i].setString(str);
+		break;
+	case MenuState::MULTI:
+		this->multiMenuText[i].setString(str);
+		break;
+	case MenuState::INGAME:
+		this->inGameMenuText[i].setString(str);
+		break;
+	case MenuState::FINISH:
+		this->finishMenuText[i].setString(str);
+		break;
+	case MenuState::HOST:
+		this->hostMenuText[i].setString(str);
+		break;
+	case MenuState::JOIN:
+		this->joinMenuText[i].setString(str);
+		break;
+	case MenuState::LOBBY:
+		this->lobbyMenuText[i].setString(str);
+		break;
+	}*/
 }

@@ -26,9 +26,10 @@ public:
 
 	bool loadContent();
 
-	std::vector<sf::Text> getMenuText();
+	std::vector<sf::Text> &getMenuText();
 	void setMenuTextPosition(int, float, float);
 	void setMenuTextFillColor(int, sf::Color);
+	void setMenuTextString(int, const std::string &);
 
 private:
 	MenuState state;
@@ -41,4 +42,6 @@ private:
 	std::vector<sf::Text> hostMenuText;
 	std::vector<sf::Text> joinMenuText;
 	std::vector<sf::Text> lobbyMenuText;
+
+	std::vector<sf::Text> *menuptr;
 };

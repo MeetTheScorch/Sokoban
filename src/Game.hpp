@@ -54,9 +54,25 @@ public:
 	bool checkNextLevel();
 	void loadTexture(const std::string &, const std::string &);
 	sf::Texture *getTexture(const std::string &);
-	void sendMessage();
-	void recieveMessage();
+	void sendPacket(int);
+	void recievePacket();
 	void addMessage(const std::string &);
+
+	struct MyPacketData
+	{
+		int type;
+		std::string message;
+		int moveX, moveY;
+	};
+
+	friend sf::Packet &operator<<(sf::Packet &packet, const Game::MyPacketData &data)
+	{
+		return packet << data.type << data.message << data.moveX << data.moveY;
+	}
+	friend sf::Packet &operator>>(sf::Packet &packet, Game::MyPacketData data)
+	{
+		return packet >> data.type >> data.message >> data.moveX >> data.moveY;
+	}
 
 private:
 	GameState state;		 //Obecny stan aplikacji
@@ -92,4 +108,8 @@ private:
 	sf::TcpSocket *socket;			  //
 	sf::Mutex globalMutex;			  //
 	bool connected;					  //
+
+	std::string inputString;
+	bool inputActive;
+	std::vector<sf::Text> chat;
 };

@@ -23,26 +23,47 @@ Game &Game::getInstance()
 
 Game::~Game()
 {
-	for (auto p : players)
+	if (menu)
 	{
-		delete p;
+		delete menu;
+	}
+	if (level)
+	{
+		delete level;
+	}
+	if (!players.empty())
+	{
+		players.clear();
 	}
 	delete player;
-
-	for (auto t : targets)
+	if (!targets.empty())
 	{
-		delete t;
+		targets.clear();
 	}
 	delete target;
-
-	for (auto c : crates)
+	if (!crates.empty())
 	{
-		delete c;
+		crates.clear();
 	}
 	delete crate;
-
-	delete menu;
-	delete level;
+	if (!texturesCollector.empty())
+	{
+		texturesCollector.clear();
+	}
+	if (!sprites.empty())
+	{
+		sprites.clear();
+	}
+	if (thread)
+	{
+		thread->terminate();
+		delete thread;
+	}
+	if (socket)
+	{
+		socket->disconnect();
+		delete socket;
+	}
 }
 
 /*Wczytywanie zasobow.*/
@@ -160,6 +181,7 @@ void Game::run()
 {
 	while (state != GameState::CLOSE)
 	{
+		std::cout << "State " << state << std::endl;
 		window.clear();
 		switch (state)
 		{
@@ -175,7 +197,6 @@ void Game::run()
 			showGame();
 			break;
 		case GameState::CLOSE:
-			closeGame();
 			break;
 		}
 	}
@@ -186,6 +207,7 @@ void Game::showMenu()
 {
 	while (state == GameState::MENU)
 	{
+		std::cout << "Menu state: " << menu->getMenuState() << std::endl;
 		switch (menu->getMenuState())
 		{
 		case Menu::MenuState::MAIN:
@@ -619,9 +641,19 @@ void Game::menuFinish()
 /**/
 void Game::menuHost()
 {
+	connected = false;
+	if (thread)
+	{
+		thread->terminate();
+		delete thread;
+	}
+	thread = new sf::Thread([=] { waitForClient(); });
+	thread->launch();
+
 	while (getWindow().isOpen() &&
 		   state == GameState::MENU &&
-		   menu->getMenuState() == Menu::MenuState::HOST)
+		   menu->getMenuState() == Menu::MenuState::HOST &&
+		   !connected)
 	{
 		sf::Vector2f mouse(sf::Mouse::getPosition(window));
 		sf::Event event;
@@ -634,6 +666,11 @@ void Game::menuHost()
 			if (event.type == sf::Event::KeyPressed &&
 				event.key.code == sf::Keyboard::Escape)
 			{
+				if (thread)
+				{
+					thread->terminate();
+					delete thread;
+				}
 				menu->setMenuState(Menu::MenuState::MAIN);
 			}
 		}
@@ -664,14 +701,29 @@ void Game::menuHost()
 		}
 		getWindow().display();
 	}
+
+	if (connected)
+	{
+		if (thread)
+		{
+			thread->terminate();
+			delete thread;
+		}
+		//thread -> recieveMessage
+		menu->setMenuState(Menu::MenuState::LOBBY);
+	}
 }
 
 /**/
 void Game::menuJoin()
 {
+	connected = false;
+	bool result = false;
+	inputString = "";
 	while (getWindow().isOpen() &&
 		   state == GameState::MENU &&
-		   menu->getMenuState() == Menu::MenuState::JOIN)
+		   menu->getMenuState() == Menu::MenuState::JOIN &&
+		   !result)
 	{
 		sf::Vector2f mouse(sf::Mouse::getPosition(window));
 		sf::Event event;
@@ -686,12 +738,39 @@ void Game::menuJoin()
 			{
 				menu->setMenuState(Menu::MenuState::MAIN);
 			}
+			else if (((event.type == sf::Event::KeyPressed &&
+					   event.key.code == sf::Keyboard::Return) ||
+					  (menu->getMenuText()[3].getGlobalBounds().contains(mouse) &&
+					   event.type == sf::Event::MouseButtonReleased &&
+					   event.mouseButton.button == sf::Mouse::Left)) &&
+					 !inputString.empty())
+			{
+				result = connectToHost(inputString);
+				inputString.clear();
+			}
+			else if (event.type == sf::Event::KeyPressed &&
+					 event.key.code == sf::Keyboard::BackSpace &&
+					 !inputString.empty())
+			{
+				inputString.erase(inputString.size() - 1, 1);
+			}
+			else if (event.type == sf::Event::TextEntered)
+			{
+				if ((event.text.unicode >= 48 && event.text.unicode <= 57) || event.text.unicode == 46)
+				{
+					inputString += static_cast<char>(event.text.unicode);
+				}
+			}
 		}
 
 		getWindow().clear();
 		int positionX, positionY = 0;
 		for (auto i = 0u; i < menu->getMenuText().size(); i++)
 		{
+			if (i == 2)
+			{
+				menu->setMenuTextString(i, inputString);
+			}
 			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
 			if (i == 1)
 				positionY += 70;
@@ -702,11 +781,11 @@ void Game::menuJoin()
 				i,
 				positionX,
 				positionY);
-			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0 || i == 1)
+			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || (i != 3 && i != 4))
 			{
 				menu->setMenuTextFillColor(i, sf::Color::Red);
 			}
-			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0 && i != 1)
+			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && (i == 3 || i == 4))
 			{
 				menu->setMenuTextFillColor(i, sf::Color::Green);
 			}
@@ -775,7 +854,7 @@ void Game::waitForClient()
 	sf::TcpListener listener;
 	listener.listen(PORT);
 	listener.accept(*socket);
-	//socket->getRemoteAddress()
+	std::cout << "Connection from: " << socket->getRemoteAddress() << std::endl;
 	connected = true;
 }
 
@@ -785,8 +864,9 @@ bool Game::connectToHost(const std::string &address)
 	sf::IpAddress IPAddress(address);
 	socket = new sf::TcpSocket();
 	auto result = socket->connect(IPAddress, PORT, sf::Time(sf::seconds(15)));
-	if(result == sf::Socket::Done)
+	if (result == sf::Socket::Done)
 	{
+		std::cout << "Connected to: " << socket->getRemoteAddress() << std::endl;
 		connected = true;
 		//puszczanie thread z recieveMessage
 		menu->setMenuState(Menu::MenuState::LOBBY);
@@ -796,7 +876,6 @@ bool Game::connectToHost(const std::string &address)
 	{
 		return false;
 	}
-
 }
 
 //------------------------Rysowanie i obsluga Gry------------------------//
@@ -990,17 +1069,72 @@ sf::Texture *Game::getTexture(const std::string &textureName)
 	return textureIterator->second;
 }
 
-void Game::sendMessage()
+void Game::sendPacket(int type)
 {
-	//
+	MyPacketData data;
+	switch(type)
+	{
+		case 0:
+			data.type = type;
+			//data.message
+			data.moveX = data.moveY = 0;
+			break;
+		case 1:
+			//
+			break;
+	}
+	sf::Packet packetSend;
+
 }
 
-void Game::recieveMessage()
+void Game::recievePacket()
 {
-	//
+	while (connected)
+	{
+		MyPacketData data;
+		sf::Packet packetRecieve;
+		if (socket->receive(packetRecieve) == sf::Socket::Disconnected)
+		{
+			std::cout << "Lost connection." << std::endl;
+			socket->disconnect();
+			//clear messages
+			//change status
+			connected = false;
+		}
+		if (packetRecieve >> data)
+		{
+			switch (data.type)
+			{
+			case 0:
+				//message
+				break;
+			case 1:
+				//
+				//
+				break;
+			}
+		}
+	}
 }
 
 void Game::addMessage(const std::string &)
 {
 	//
 }
+
+/*
+29.04 22:51
+Zacmienie mozgu - nie moge sie juz skupic
+ostatnie zmiany w recievePacket
+obecny cel:
+- przesylac odpowiednie paczki miedzy hostem a klientem
+w zaleznosci od paczki albo dodawac wiadomosc albo aktualizowac pozycje drugiego gracza
+- problemy z polaczeniem
+
+co trzeba zrobic/przemyslec:
+- wybor poziomu w lobby
+- jak sie bedzie zachowywac gra jezeli bedzie tylko wysylac paczki po wykonaniu ruchu
+- co sie dzieje kiedy po polaczeniu jeden z graczy wyjdzie do/otworzy menu
+- czat w widoku gry MP
+- swoje zycie
+*/
