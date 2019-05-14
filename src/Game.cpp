@@ -1,6 +1,6 @@
 #include "Game.hpp"
 
-Game::Game() : window(sf::VideoMode(1024, 768), "Sokoban", sf::Style::Close)
+Game::Game() : window(sf::VideoMode(1200, 600), "Sokoban", sf::Style::Close)
 {
 	this->state = GameState::START;
 	this->connected = false;
@@ -186,7 +186,13 @@ void Game::buildLevel(const std::string &name)
 	}
 
 	gameView.setCenter(level->getSizeX() * textureSize / 2, level->getSizeY() * textureSize / 2);
-	window.setView(gameView);
+	if (mode == Data::GameMode::MULTIPLAYER)
+	{
+		gameView.setCenter(gameView.getCenter().x + (gameView.getSize().x / 6),
+						   gameView.getCenter().y);
+	}
+	currentView = &gameView;
+	window.setView(*currentView);
 }
 
 /*Glowna petla aplikacji.*/
@@ -202,11 +208,13 @@ void Game::run()
 			showMenu();
 			break;
 		case GameState::MENU:
-			window.setView(menuView);
+			currentView = &menuView;
+			window.setView(*currentView);
 			showMenu();
 			break;
 		case GameState::GAME:
-			window.setView(gameView);
+			currentView = &gameView;
+			window.setView(*currentView);
 			showGame();
 			break;
 		case GameState::DISCONNECT:
@@ -847,7 +855,7 @@ void Game::menuJoin()
 /**/
 void Game::menuLobby()
 {
-	messages = new std::vector<sf::Text>();
+	//messages = new std::vector<sf::Text>();
 	while (getWindow().isOpen() &&
 		   state == GameState::MENU &&
 		   menu->getMenuState() == Menu::MenuState::LOBBY &&
@@ -936,23 +944,7 @@ void Game::menuLobby()
 				window.draw(menu->getMenuText()[i]);
 			}
 
-			inputText.setFont(font);
-			inputText.setCharacterSize(30);
-			inputText.setString(inputString);
-			positionX = window.getSize().x / 3 * 2 - inputText.getLocalBounds().width / 2;
-			positionY = window.getSize().y - inputText.getLocalBounds().height - 50;
-			inputText.setPosition(positionX, positionY);
-			inputText.setFillColor(sf::Color::White);
-			window.draw(inputText);
-
-			for (auto i = messages->size(); i > 0u; i--)
-			{
-				sf::FloatRect bounds = (*messages)[i - 1].getGlobalBounds();
-				(*messages)[i - 1].setPosition(window.getSize().x / 3 * 2 - bounds.width / 2,
-											   window.getSize().y - bounds.height - (messages->size() - i) * 30 - 100);
-				(*messages)[i - 1].setFillColor(sf::Color::White);
-				window.draw((*messages)[i - 1]);
-			}
+			drawChat();
 		}
 		getWindow().display();
 	}
@@ -978,6 +970,7 @@ void Game::waitForClient()
 		std::cout << "Connection from: " << socket->getRemoteAddress() << std::endl;
 		connected = true;
 		window.setTitle("Sokoban - HOST");
+		messages = new std::vector<sf::Text>();
 		break;
 	default:
 		break;
@@ -1004,6 +997,7 @@ bool Game::connectToHost(const std::string &address)
 		thread = new sf::Thread([=] { receivePacket(); });
 		thread->launch();
 		window.setTitle("Sokoban - CLIENT");
+		messages = new std::vector<sf::Text>();
 		return true;
 		break;
 	default:
@@ -1237,11 +1231,39 @@ void Game::showGame()
 						}
 					}
 				}
+				else if (event.key.code == sf::Keyboard::Return)
+				{
+					if (!inputString.empty())
+					{
+						messageSend = inputString;
+						sendPacket(Game::PacketType::MESSAGE);
+						addMessage(inputString);
+						inputString.clear();
+					}
+				}
+				else if (event.key.code == sf::Keyboard::BackSpace)
+				{
+					if (!inputString.empty())
+					{
+						inputString.erase(inputString.size() - 1, 1);
+					}
+				}
+			}
+			else if (event.type == sf::Event::TextEntered)
+			{
+				if (event.text.unicode >= 32 && event.text.unicode < 128)
+				{
+					inputString += static_cast<char>(event.text.unicode);
+				}
 			}
 		}
 
 		getWindow().clear();
 		drawGame();
+		if (mode == Data::GameMode::MULTIPLAYER)
+		{
+			drawChat();
+		}
 		if (checkFinish())
 		{
 			state = GameState::MENU;
@@ -1276,7 +1298,30 @@ void Game::drawGame()
 	{
 		getWindow().draw(p->getSprite());
 	}
-	window.setView(gameView);
+	currentView = &gameView;
+	window.setView(*currentView);
+}
+
+void Game::drawChat()
+{
+	int positionX, positionY;
+	inputText.setFont(font);
+	inputText.setCharacterSize(30);
+	inputText.setString(inputString);
+	positionX = currentView->getCenter().x + currentView->getSize().x / 3 - inputText.getLocalBounds().width / 2;
+	positionY = currentView->getCenter().y + currentView->getSize().y / 2 - inputText.getLocalBounds().height - 50;
+	inputText.setPosition(positionX, positionY);
+	inputText.setFillColor(sf::Color::White);
+	window.draw(inputText);
+
+	for (auto i = messages->size(); i > 0u; i--)
+	{
+		sf::FloatRect bounds = (*messages)[i - 1].getGlobalBounds();
+		(*messages)[i - 1].setPosition(currentView->getCenter().x + currentView->getSize().x / 3 - bounds.width / 2,
+									   currentView->getCenter().y + currentView->getSize().y / 2 - bounds.height - (messages->size() - i) * 30 - 100);
+		(*messages)[i - 1].setFillColor(sf::Color::White);
+		window.draw((*messages)[i - 1]);
+	}
 }
 
 //------------------------Dodatkowe funkcje------------------------//
@@ -1298,7 +1343,7 @@ Na dane pole mozna wejsc, jezeli jest puste, badz jezeli obiekt zajmujacy dane p
 przesunac na nastepne pole.*/
 bool Game::checkColission(int moveX, int moveY, bool playerFlag, bool local)
 {
-	int  posX, posY;
+	int posX, posY;
 	if (local)
 	{
 		posX = player->getPositionX();

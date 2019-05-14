@@ -72,6 +72,7 @@ public:
 	//
 	void showGame();
 	void drawGame();
+	void drawChat();
 	//
 	void move(int, int, Player *);
 	bool checkColission(int, int, bool, bool);
@@ -97,6 +98,7 @@ private:
 	sf::RenderWindow window;	   //Okno aplikacji
 	sf::View gameView;			   //Widok na gre
 	sf::View menuView;			   //Widok na menu
+	sf::View *currentView;		   //Obecny widok
 	sf::Font font;				   //Czcionka uzywana w aplikacji
 
 	Menu *menu;		  //Obiekt menu
