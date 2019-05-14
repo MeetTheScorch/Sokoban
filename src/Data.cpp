@@ -29,6 +29,10 @@ bool Data::loadContent()
 	singleplayerLevels.insert({"Level 10", "level10"});
 
 	multiplayerLevels.insert({"Multi 00", "multi0"});
+	multiplayerLevels.insert({"Multi 01", "multi1"});
+	multiplayerLevels.insert({"Multi 02", "multi2"});
+	multiplayerLevels.insert({"Multi 03", "multi3"});
+	multiplayerLevels.insert({"Multi 04", "multi4"});
 
 	return true;
 }
