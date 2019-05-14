@@ -3,6 +3,7 @@
 Game::Game() : window(sf::VideoMode(1024, 768), "Sokoban", sf::Style::Close)
 {
 	this->state = GameState::START;
+	this->connected = false;
 	loadContent();
 	Data::getInstance().loadContent();
 	menu = new Menu(font);
@@ -54,16 +55,16 @@ Game::~Game()
 	{
 		sprites.clear();
 	}
-	if (thread)
+	/* if (thread)
 	{
 		thread->terminate();
 		delete thread;
-	}
-	if (socket)
+	} */
+	/* if (socket)
 	{
 		socket->disconnect();
 		delete socket;
-	}
+	} */
 }
 
 /*Wczytywanie zasobow.*/
@@ -105,7 +106,7 @@ void Game::buildLevel(const std::string &name)
 	}
 
 	level = new Level();
-	level->loadContent(name);
+	level->loadContent(mode, name);
 
 	sprites.clear();
 	sprites.resize(level->getSizeY());
@@ -134,6 +135,7 @@ void Game::buildLevel(const std::string &name)
 		}
 	}
 
+	std::cout << "Players positions size " << level->getPlayersPositions().size() << std::endl;
 	for (auto p : level->getPlayersPositions())
 	{
 		if (level->getPlayersPositions().size() == 1)
@@ -171,7 +173,18 @@ void Game::buildLevel(const std::string &name)
 	}
 
 	currentLevelName = name;
-	player = players[0];
+	std::cout << "Players size " << players.size() << std::endl;
+	if (connectionType == ConnectionType::HOST)
+	{
+		player = players[0];
+		coPlayer = players[1];
+	}
+	else
+	{
+		coPlayer = players[0];
+		player = players[1];
+	}
+
 	gameView.setCenter(level->getSizeX() * textureSize / 2, level->getSizeY() * textureSize / 2);
 	window.setView(gameView);
 }
@@ -181,7 +194,7 @@ void Game::run()
 {
 	while (state != GameState::CLOSE)
 	{
-		std::cout << "State " << state << std::endl;
+		//std::cout << "State " << state << std::endl;
 		window.clear();
 		switch (state)
 		{
@@ -196,6 +209,9 @@ void Game::run()
 			window.setView(gameView);
 			showGame();
 			break;
+		case GameState::DISCONNECT:
+			disconnect();
+			break;
 		case GameState::CLOSE:
 			break;
 		}
@@ -207,7 +223,7 @@ void Game::showMenu()
 {
 	while (state == GameState::MENU)
 	{
-		std::cout << "Menu state: " << menu->getMenuState() << std::endl;
+		//std::cout << "Menu state: " << menu->getMenuState() << std::endl;
 		switch (menu->getMenuState())
 		{
 		case Menu::MenuState::MAIN:
@@ -273,12 +289,14 @@ void Game::menuMain()
 					 event.mouseButton.button == sf::Mouse::Left)
 			{
 				menu->setMenuState(Menu::MenuState::SINGLE);
+				mode = Data::GameMode::SINGLEPLAYER;
 			}
 			else if (menu->getMenuText()[2].getGlobalBounds().contains(mouse) &&
 					 event.type == sf::Event::MouseButtonReleased &&
 					 event.mouseButton.button == sf::Mouse::Left)
 			{
 				menu->setMenuState(Menu::MenuState::MULTI);
+				mode = Data::GameMode::MULTIPLAYER;
 			}
 			else if (menu->getMenuText()[3].getGlobalBounds().contains(mouse) &&
 					 event.type == sf::Event::MouseButtonReleased &&
@@ -289,28 +307,31 @@ void Game::menuMain()
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 0;
-		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		if (menu->getMenuState() == Menu::MenuState::MAIN)
 		{
-			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-			if (i == 1)
-				positionY += 70;
-			else
-				positionY += 50;
+			int positionX, positionY = 0;
+			for (auto i = 0u; i < menu->getMenuText().size(); i++)
+			{
+				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+				if (i == 1)
+					positionY += 70;
+				else
+					positionY += 50;
 
-			menu->setMenuTextPosition(
-				i,
-				positionX,
-				positionY);
-			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Red);
+				menu->setMenuTextPosition(
+					i,
+					positionX,
+					positionY);
+				if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Red);
+				}
+				else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Green);
+				}
+				window.draw(menu->getMenuText()[i]);
 			}
-			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Green);
-			}
-			window.draw(menu->getMenuText()[i]);
 		}
 		getWindow().display();
 	}
@@ -319,6 +340,7 @@ void Game::menuMain()
 /*Rysowanie i obsluga menu wyboru poziomu (START).*/
 void Game::menuSingle()
 {
+	connectionType = ConnectionType::HOST;
 	page = 0;
 	while (getWindow().isOpen() &&
 		   state == GameState::MENU &&
@@ -350,7 +372,7 @@ void Game::menuSingle()
 					 event.type == sf::Event::MouseButtonReleased &&
 					 event.mouseButton.button == sf::Mouse::Left)
 			{
-				if (page < (Data::getInstance().getLevels().size() - 1) / 5)
+				if (page < (Data::getInstance().getLevels(mode).size() - 1) / 5)
 				{
 					page++;
 				}
@@ -381,49 +403,52 @@ void Game::menuSingle()
 		}
 
 		getWindow().clear();
-		int positionX = 0, positionY = 0, previousSizeY = 0;
-		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		if (menu->getMenuState() == Menu::MenuState::SINGLE)
 		{
-			if (i == 0 || ((i >= (page * 5) + 3) && (i < ((page + 1) * 5) + 3)) || i == menu->getMenuText().size() - 1)
+			int positionX = 0, positionY = 0, previousSizeY = 0;
+			for (auto i = 0u; i < menu->getMenuText().size(); i++)
 			{
-				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-				positionY += previousSizeY + 30;
-				//poprawic
-				previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
-			}
-			else
-			{
-				if (i == 1) //Przycisk previous 5
+				if (i == 0 || ((i >= (page * 5) + 3) && (i < ((page + 1) * 5) + 3)) || i == menu->getMenuText().size() - 1)
 				{
-					positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width - 50;
+					positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
 					positionY += previousSizeY + 30;
-				}
-				else if (i == 2) //Przycisk next 5
-				{
-					positionX = window.getSize().x / 2 + 50;
+					//poprawic
 					previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
 				}
-			}
-			if (i == 0 ||
-				(i == 1 && page > 0) ||
-				(i == 2 && page < ((menu->getMenuText().size() - 4) / 5)) ||
-				((i >= (page * 5) + 3) && (i < ((page + 1) * 5) + 3)) ||
-				i == menu->getMenuText().size() - 1)
-			{
-				menu->setMenuTextPosition(
-					i,
-					positionX,
-					positionY);
+				else
+				{
+					if (i == 1) //Przycisk previous 5
+					{
+						positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width - 50;
+						positionY += previousSizeY + 30;
+					}
+					else if (i == 2) //Przycisk next 5
+					{
+						positionX = window.getSize().x / 2 + 50;
+						previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
+					}
+				}
+				if (i == 0 ||
+					(i == 1 && page > 0) ||
+					(i == 2 && page < ((menu->getMenuText().size() - 4) / 5)) ||
+					((i >= (page * 5) + 3) && (i < ((page + 1) * 5) + 3)) ||
+					i == menu->getMenuText().size() - 1)
+				{
+					menu->setMenuTextPosition(
+						i,
+						positionX,
+						positionY);
 
-				if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
-				{
-					menu->setMenuTextFillColor(i, sf::Color::Red);
+					if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
+					{
+						menu->setMenuTextFillColor(i, sf::Color::Red);
+					}
+					else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
+					{
+						menu->setMenuTextFillColor(i, sf::Color::Green);
+					}
+					window.draw(menu->getMenuText()[i]);
 				}
-				else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
-				{
-					menu->setMenuTextFillColor(i, sf::Color::Green);
-				}
-				window.draw(menu->getMenuText()[i]);
 			}
 		}
 		getWindow().display();
@@ -473,28 +498,31 @@ void Game::menuMulti()
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 0;
-		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		if (menu->getMenuState() == Menu::MenuState::MULTI)
 		{
-			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-			if (i == 1)
-				positionY += 70;
-			else
-				positionY += 50;
+			int positionX, positionY = 0;
+			for (auto i = 0u; i < menu->getMenuText().size(); i++)
+			{
+				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+				if (i == 1)
+					positionY += 70;
+				else
+					positionY += 50;
 
-			menu->setMenuTextPosition(
-				i,
-				positionX,
-				positionY);
-			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Red);
+				menu->setMenuTextPosition(
+					i,
+					positionX,
+					positionY);
+				if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Red);
+				}
+				else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Green);
+				}
+				window.draw(menu->getMenuText()[i]);
 			}
-			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Green);
-			}
-			window.draw(menu->getMenuText()[i]);
 		}
 		getWindow().display();
 	}
@@ -543,27 +571,30 @@ void Game::menuInGame()
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 100, previousSizeY = 0;
-		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		if (menu->getMenuState() == Menu::MenuState::INGAME)
 		{
-			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-			positionY += previousSizeY + 30;
-			//poprawic
-			previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
+			int positionX, positionY = 100, previousSizeY = 0;
+			for (auto i = 0u; i < menu->getMenuText().size(); i++)
+			{
+				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+				positionY += previousSizeY + 30;
+				//poprawic
+				previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
 
-			menu->setMenuTextPosition(
-				i,
-				positionX,
-				positionY);
-			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse))
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Red);
+				menu->setMenuTextPosition(
+					i,
+					positionX,
+					positionY);
+				if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse))
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Red);
+				}
+				else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse))
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Green);
+				}
+				window.draw(menu->getMenuText()[i]);
 			}
-			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse))
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Green);
-			}
-			window.draw(menu->getMenuText()[i]);
 		}
 		getWindow().display();
 	}
@@ -593,9 +624,9 @@ void Game::menuFinish()
 					 event.type == sf::Event::MouseButtonReleased &&
 					 event.mouseButton.button == sf::Mouse::Left)
 			{
-				if (Data::getInstance().nextLevel(currentLevelName))
+				if (Data::getInstance().nextLevel(mode, currentLevelName))
 				{
-					buildLevel(Data::getInstance().getNextLevel(currentLevelName));
+					buildLevel(Data::getInstance().getNextLevel(mode, currentLevelName));
 					state = GameState::GAME;
 				}
 			}
@@ -609,29 +640,32 @@ void Game::menuFinish()
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 0, previousSizeY = 0;
-		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		if (menu->getMenuState() == Menu::MenuState::FINISH)
 		{
-			if (i != 1 || (i == 1 && Data::getInstance().nextLevel(currentLevelName)))
+			int positionX, positionY = 0, previousSizeY = 0;
+			for (auto i = 0u; i < menu->getMenuText().size(); i++)
 			{
-				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-				positionY += previousSizeY + 30;
-				//poprawic
-				previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
+				if (i != 1 || (i == 1 && Data::getInstance().nextLevel(mode, currentLevelName)))
+				{
+					positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+					positionY += previousSizeY + 30;
+					//poprawic
+					previousSizeY = menu->getMenuText()[i].getLocalBounds().height;
 
-				menu->setMenuTextPosition(
-					i,
-					positionX,
-					positionY);
-				if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
-				{
-					menu->setMenuTextFillColor(i, sf::Color::Red);
+					menu->setMenuTextPosition(
+						i,
+						positionX,
+						positionY);
+					if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
+					{
+						menu->setMenuTextFillColor(i, sf::Color::Red);
+					}
+					else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
+					{
+						menu->setMenuTextFillColor(i, sf::Color::Green);
+					}
+					window.draw(menu->getMenuText()[i]);
 				}
-				else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
-				{
-					menu->setMenuTextFillColor(i, sf::Color::Green);
-				}
-				window.draw(menu->getMenuText()[i]);
 			}
 		}
 		getWindow().display();
@@ -641,12 +675,8 @@ void Game::menuFinish()
 /**/
 void Game::menuHost()
 {
-	connected = false;
-	if (thread)
-	{
-		thread->terminate();
-		delete thread;
-	}
+	//connected = false;
+	connectionType = ConnectionType::HOST;
 	thread = new sf::Thread([=] { waitForClient(); });
 	thread->launch();
 
@@ -666,38 +696,42 @@ void Game::menuHost()
 			if (event.type == sf::Event::KeyPressed &&
 				event.key.code == sf::Keyboard::Escape)
 			{
-				if (thread)
-				{
-					thread->terminate();
-					delete thread;
-				}
-				menu->setMenuState(Menu::MenuState::MAIN);
+				state = GameState::DISCONNECT;
+			}
+			else if (menu->getMenuText()[2].getGlobalBounds().contains(mouse) &&
+					 event.type == sf::Event::MouseButtonReleased &&
+					 event.mouseButton.button == sf::Mouse::Left)
+			{
+				state = GameState::DISCONNECT;
 			}
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 0;
-		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		if (menu->getMenuState() == Menu::MenuState::HOST)
 		{
-			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-			if (i == 1)
-				positionY += 70;
-			else
-				positionY += 50;
+			int positionX, positionY = 0;
+			for (auto i = 0u; i < menu->getMenuText().size(); i++)
+			{
+				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+				if (i == 1)
+					positionY += 70;
+				else
+					positionY += 50;
 
-			menu->setMenuTextPosition(
-				i,
-				positionX,
-				positionY);
-			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0 || i == 1)
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Red);
+				menu->setMenuTextPosition(
+					i,
+					positionX,
+					positionY);
+				if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0 || i == 1)
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Red);
+				}
+				else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0 && i != 1)
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Green);
+				}
+				window.draw(menu->getMenuText()[i]);
 			}
-			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0 && i != 1)
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Green);
-			}
-			window.draw(menu->getMenuText()[i]);
 		}
 		getWindow().display();
 	}
@@ -706,10 +740,13 @@ void Game::menuHost()
 	{
 		if (thread)
 		{
+			//thread->wait();
 			thread->terminate();
 			delete thread;
 		}
-		//thread -> recieveMessage
+		thread = new sf::Thread([=] { receivePacket(); });
+		thread->launch();
+		connected = true;
 		menu->setMenuState(Menu::MenuState::LOBBY);
 	}
 }
@@ -717,7 +754,8 @@ void Game::menuHost()
 /**/
 void Game::menuJoin()
 {
-	connected = false;
+	//connected = false;
+	connectionType = ConnectionType::CLIENT;
 	bool result = false;
 	inputString = "";
 	while (getWindow().isOpen() &&
@@ -733,10 +771,14 @@ void Game::menuJoin()
 			{
 				closeGame();
 			}
-			if (event.type == sf::Event::KeyPressed &&
-				event.key.code == sf::Keyboard::Escape)
+			if ((event.type == sf::Event::KeyPressed &&
+				 event.key.code == sf::Keyboard::Escape) ||
+				(menu->getMenuText()[4].getGlobalBounds().contains(mouse) &&
+				 event.type == sf::Event::MouseButtonReleased &&
+				 event.mouseButton.button == sf::Mouse::Left))
 			{
 				menu->setMenuState(Menu::MenuState::MAIN);
+				//state = GameState::DISCONNECT;
 			}
 			else if (((event.type == sf::Event::KeyPressed &&
 					   event.key.code == sf::Keyboard::Return) ||
@@ -747,6 +789,10 @@ void Game::menuJoin()
 			{
 				result = connectToHost(inputString);
 				inputString.clear();
+				if (result)
+				{
+					menu->setMenuState(Menu::MenuState::LOBBY);
+				}
 			}
 			else if (event.type == sf::Event::KeyPressed &&
 					 event.key.code == sf::Keyboard::BackSpace &&
@@ -764,32 +810,35 @@ void Game::menuJoin()
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 0;
-		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		if (menu->getMenuState() == Menu::MenuState::JOIN)
 		{
-			if (i == 2)
+			int positionX, positionY = 0;
+			for (auto i = 0u; i < menu->getMenuText().size(); i++)
 			{
-				menu->setMenuTextString(i, inputString);
-			}
-			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-			if (i == 1)
-				positionY += 70;
-			else
-				positionY += 50;
+				if (menu->getMenuState() == Menu::MenuState::JOIN && i == 2)
+				{
+					menu->setMenuTextString(i, inputString);
+				}
+				positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
+				if (i == 1)
+					positionY += 70;
+				else
+					positionY += 50;
 
-			menu->setMenuTextPosition(
-				i,
-				positionX,
-				positionY);
-			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || (i != 3 && i != 4))
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Red);
+				menu->setMenuTextPosition(
+					i,
+					positionX,
+					positionY);
+				if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || (i != 3 && i != 4))
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Red);
+				}
+				else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && (i == 3 || i == 4))
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Green);
+				}
+				window.draw(menu->getMenuText()[i]);
 			}
-			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && (i == 3 || i == 4))
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Green);
-			}
-			window.draw(menu->getMenuText()[i]);
 		}
 		getWindow().display();
 	}
@@ -798,9 +847,11 @@ void Game::menuJoin()
 /**/
 void Game::menuLobby()
 {
+	messages = new std::vector<sf::Text>();
 	while (getWindow().isOpen() &&
 		   state == GameState::MENU &&
-		   menu->getMenuState() == Menu::MenuState::LOBBY)
+		   menu->getMenuState() == Menu::MenuState::LOBBY &&
+		   connected)
 	{
 		sf::Vector2f mouse(sf::Mouse::getPosition(window));
 		sf::Event event;
@@ -810,36 +861,98 @@ void Game::menuLobby()
 			{
 				closeGame();
 			}
-			if (event.type == sf::Event::KeyPressed &&
-				event.key.code == sf::Keyboard::Escape)
+			else if (event.type == sf::Event::KeyPressed &&
+					 event.key.code == sf::Keyboard::Escape)
 			{
 				menu->setMenuState(Menu::MenuState::MAIN);
+			}
+			else if (menu->getMenuText()[1].getGlobalBounds().contains(mouse) &&
+					 event.type == sf::Event::MouseButtonReleased &&
+					 event.mouseButton.button == sf::Mouse::Left &&
+					 connectionType == ConnectionType::HOST)
+			{
+				buildLevel(menu->getMenuText()[1].getString());
+				sendPacket(PacketType::LEVEL);
+				state = GameState::GAME;
+			}
+			else if (menu->getMenuText()[menu->getMenuText().size() - 1].getGlobalBounds().contains(mouse) &&
+					 event.type == sf::Event::MouseButtonReleased &&
+					 event.mouseButton.button == sf::Mouse::Left)
+			{
+				state = GameState::DISCONNECT;
+			}
+			else if (event.type == sf::Event::KeyPressed &&
+					 event.key.code == sf::Keyboard::Return)
+			{
+				if (!inputString.empty())
+				{
+					messageSend = inputString;
+					sendPacket(Game::PacketType::MESSAGE);
+					addMessage(inputString);
+					inputString.clear();
+				}
+			}
+			else if (event.type == sf::Event::KeyPressed &&
+					 event.key.code == sf::Keyboard::BackSpace)
+			{
+				if (!inputString.empty())
+				{
+					inputString.erase(inputString.size() - 1, 1);
+				}
+			}
+			else if (event.type == sf::Event::TextEntered)
+			{
+				if (event.text.unicode >= 32 && event.text.unicode < 128)
+				{
+					inputString += static_cast<char>(event.text.unicode);
+				}
 			}
 		}
 
 		getWindow().clear();
-		int positionX, positionY = 0;
-		for (auto i = 0u; i < menu->getMenuText().size(); i++)
+		if (menu->getMenuState() == Menu::MenuState::LOBBY)
 		{
-			positionX = window.getSize().x / 2 - menu->getMenuText()[i].getLocalBounds().width / 2;
-			if (i == 1)
-				positionY += 70;
-			else
-				positionY += 50;
+			int positionX, positionY = 0;
+			for (auto i = 0u; i < menu->getMenuText().size(); i++)
+			{
+				positionX = window.getSize().x / 3 - menu->getMenuText()[i].getLocalBounds().width / 2;
+				if (i == 1)
+					positionY += 70;
+				else
+					positionY += 50;
 
-			menu->setMenuTextPosition(
-				i,
-				positionX,
-				positionY);
-			if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0 || i == 1)
-			{
-				menu->setMenuTextFillColor(i, sf::Color::Red);
+				menu->setMenuTextPosition(
+					i,
+					positionX,
+					positionY);
+				if (!menu->getMenuText()[i].getGlobalBounds().contains(mouse) || i == 0)
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Red);
+				}
+				else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0)
+				{
+					menu->setMenuTextFillColor(i, sf::Color::Green);
+				}
+				window.draw(menu->getMenuText()[i]);
 			}
-			else if (menu->getMenuText()[i].getGlobalBounds().contains(mouse) && i != 0 && i != 1)
+
+			inputText.setFont(font);
+			inputText.setCharacterSize(30);
+			inputText.setString(inputString);
+			positionX = window.getSize().x / 3 * 2 - inputText.getLocalBounds().width / 2;
+			positionY = window.getSize().y - inputText.getLocalBounds().height - 50;
+			inputText.setPosition(positionX, positionY);
+			inputText.setFillColor(sf::Color::White);
+			window.draw(inputText);
+
+			for (auto i = messages->size(); i > 0u; i--)
 			{
-				menu->setMenuTextFillColor(i, sf::Color::Green);
+				sf::FloatRect bounds = (*messages)[i - 1].getGlobalBounds();
+				(*messages)[i - 1].setPosition(window.getSize().x / 3 * 2 - bounds.width / 2,
+											   window.getSize().y - bounds.height - (messages->size() - i) * 30 - 100);
+				(*messages)[i - 1].setFillColor(sf::Color::White);
+				window.draw((*messages)[i - 1]);
 			}
-			window.draw(menu->getMenuText()[i]);
 		}
 		getWindow().display();
 	}
@@ -852,10 +965,23 @@ void Game::waitForClient()
 {
 	socket = new sf::TcpSocket();
 	sf::TcpListener listener;
-	listener.listen(PORT);
-	listener.accept(*socket);
-	std::cout << "Connection from: " << socket->getRemoteAddress() << std::endl;
-	connected = true;
+	auto result = listener.listen(PORT);
+	while (result != sf::TcpListener::Done)
+	{
+		sf::sleep(sf::Time(sf::seconds(5)));
+		result = listener.listen(PORT);
+	}
+	std::cout << "Listening on port: " << PORT << std::endl;
+	switch (listener.accept(*socket))
+	{
+	case sf::Socket::Done:
+		std::cout << "Connection from: " << socket->getRemoteAddress() << std::endl;
+		connected = true;
+		window.setTitle("Sokoban - HOST");
+		break;
+	default:
+		break;
+	}
 }
 
 /*Laczenie z hostem.*/
@@ -863,19 +989,179 @@ bool Game::connectToHost(const std::string &address)
 {
 	sf::IpAddress IPAddress(address);
 	socket = new sf::TcpSocket();
-	auto result = socket->connect(IPAddress, PORT, sf::Time(sf::seconds(15)));
-	if (result == sf::Socket::Done)
+	std::cout << "Trying to connect to " << IPAddress << std::endl;
+	switch (socket->connect(IPAddress, PORT, sf::Time(sf::seconds(15))))
 	{
+	case sf::Socket::Done:
 		std::cout << "Connected to: " << socket->getRemoteAddress() << std::endl;
 		connected = true;
-		//puszczanie thread z recieveMessage
-		menu->setMenuState(Menu::MenuState::LOBBY);
+		//
+		if (thread)
+		{
+			thread->terminate();
+			delete thread;
+		}
+		thread = new sf::Thread([=] { receivePacket(); });
+		thread->launch();
+		window.setTitle("Sokoban - CLIENT");
 		return true;
-	}
-	else
-	{
+		break;
+	default:
+		std::cout << "Couldn't connect." << std::endl;
 		return false;
+		break;
 	}
+}
+
+/*Funkcja wywolywana do rozlaczania polaczenie.*/
+void Game::disconnect()
+{
+	connected = false;
+	std::cout << "Disconnect." << std::endl;
+	if (thread)
+	{
+		thread->terminate();
+		delete thread;
+	}
+	if (socket)
+	{
+		socket->disconnect();
+		delete socket;
+	}
+	messages->clear();
+	delete messages;
+	state = GameState::MENU;
+	menu->setMenuState(Menu::MenuState::MAIN);
+	window.setTitle("Sokoban");
+}
+
+void Game::receivePacket()
+{
+	while (connected)
+	{
+		sf::Packet packetReceive;
+		MyPacketData data;
+		switch (socket->receive(packetReceive))
+		{
+		case sf::Socket::Done:
+			if (packetReceive >> data)
+			{
+				std::cout << "Received packet: "
+						  << data.type << ", "
+						  << data.message << ", "
+						  << data.moveX << ", "
+						  << data.moveY << ", data size: "
+						  << packetReceive.getDataSize() << std::endl;
+
+				if (data.type == "LEVEL")
+				{
+					buildLevel(data.message);
+					state = GameState::GAME;
+				}
+				else if (data.type == "MESSAGE")
+				{
+					addMessage(data.message);
+				}
+				else if (data.type == "MOVE")
+				{
+					if (!checkColission(data.moveX, data.moveY, true, false))
+					{
+						move(data.moveX, data.moveY, coPlayer);
+					}
+				}
+				else
+				{
+					std::cout << "Empty packet, no action." << std::endl;
+				}
+			}
+			break;
+		case sf::Socket::NotReady:
+			std::cout << "Receive - not ready." << std::endl;
+			break;
+		case sf::Socket::Partial:
+			std::cout << "Receive - partial." << std::endl;
+			break;
+		case sf::Socket::Disconnected:
+			std::cout << "Lost connection." << std::endl;
+			connected = false;
+			state = GameState::DISCONNECT;
+			break;
+		case sf::Socket::Error:
+			std::cout << "Receive - error." << std::endl;
+			break;
+		default:
+			std::cout << "Something wrong :O" << std::endl;
+			break;
+		}
+	}
+}
+
+void Game::sendPacket(PacketType type)
+{
+	sf::Packet packetSend;
+	MyPacketData data;
+	switch (type)
+	{
+	case PacketType::LEVEL:
+		data.type = "LEVEL";
+		data.message = currentLevelName;
+		data.moveX = 0;
+		data.moveY = 0;
+		break;
+	case PacketType::MESSAGE:
+		data.type = "MESSAGE";
+		data.message = messageSend;
+		data.moveX = 0;
+		data.moveY = 0;
+		break;
+	case PacketType::MOVE:
+		data.type = "MOVE";
+		data.message = "";
+		data.moveX = moveX;
+		data.moveY = moveY;
+		break;
+	default:
+		data.type = "";
+		data.message = "";
+		data.moveX = 0;
+		data.moveY = 0;
+		break;
+	}
+
+	packetSend << data;
+	switch (socket->send(packetSend))
+	{
+	case sf::Socket::Done:
+		std::cout << "Packet sent: "
+				  << data.type << ", "
+				  << data.message << ", "
+				  << data.moveX << ", "
+				  << data.moveY << ", data size: "
+				  << packetSend.getDataSize() << std::endl;
+		break;
+	case sf::Socket::NotReady:
+		break;
+	case sf::Socket::Partial:
+		break;
+	case sf::Socket::Disconnected:
+		std::cout << "Couldn't send packet, connection lost." << std::endl;
+		connected = false;
+		state = GameState::DISCONNECT;
+		break;
+	case sf::Socket::Error:
+		break;
+	default:
+		break;
+	}
+}
+
+void Game::addMessage(const std::string &text)
+{
+	sf::Text message;
+	message.setFont(font);
+	message.setCharacterSize(15);
+	message.setString(text);
+	messages->push_back(message);
 }
 
 //------------------------Rysowanie i obsluga Gry------------------------//
@@ -901,23 +1187,55 @@ void Game::showGame()
 				}
 				if (event.key.code == sf::Keyboard::Up)
 				{
-					if (!checkColission(0, -1, true))
-						move(0, -1);
+					if (!checkColission(0, -1, true, true))
+					{
+						move(0, -1, player);
+						if (mode == Data::GameMode::MULTIPLAYER)
+						{
+							moveX = 0;
+							moveY = -1;
+							sendPacket(PacketType::MOVE);
+						}
+					}
 				}
 				else if (event.key.code == sf::Keyboard::Down)
 				{
-					if (!checkColission(0, 1, true))
-						move(0, 1);
+					if (!checkColission(0, 1, true, true))
+					{
+						move(0, 1, player);
+						if (mode == Data::GameMode::MULTIPLAYER)
+						{
+							moveX = 0;
+							moveY = 1;
+							sendPacket(PacketType::MOVE);
+						}
+					}
 				}
 				else if (event.key.code == sf::Keyboard::Right)
 				{
-					if (!checkColission(1, 0, true))
-						move(1, 0);
+					if (!checkColission(1, 0, true, true))
+					{
+						move(1, 0, player);
+						if (mode == Data::GameMode::MULTIPLAYER)
+						{
+							moveX = 1;
+							moveY = 0;
+							sendPacket(PacketType::MOVE);
+						}
+					}
 				}
 				else if (event.key.code == sf::Keyboard::Left)
 				{
-					if (!checkColission(-1, 0, true))
-						move(-1, 0);
+					if (!checkColission(-1, 0, true, true))
+					{
+						move(-1, 0, player);
+						if (mode == Data::GameMode::MULTIPLAYER)
+						{
+							moveX = -1;
+							moveY = 0;
+							sendPacket(PacketType::MOVE);
+						}
+					}
 				}
 			}
 		}
@@ -964,17 +1282,34 @@ void Game::drawGame()
 //------------------------Dodatkowe funkcje------------------------//
 
 /**/
-void Game::move(int moveX, int moveY)
+void Game::move(int moveX, int moveY, Player *p)
 {
-	player->move(moveX, moveY);
+	p->move(moveX, moveY);
 }
+
+/**/
+/*void Game::moveV2(int moveX, int moveY, Crate *c)
+{
+	c->move(moveX, moveY);
+}*/
 
 /*Test na kolizje - zwraca true jezeli nie da sie wejsc na pole, w przeciwnym wypadku false.
 Na dane pole mozna wejsc, jezeli jest puste, badz jezeli obiekt zajmujacy dane pole mozna
 przesunac na nastepne pole.*/
-bool Game::checkColission(int moveX, int moveY, bool playerFlag)
+bool Game::checkColission(int moveX, int moveY, bool playerFlag, bool local)
 {
-	int posX = player->getPositionX(), posY = player->getPositionY();
+	int  posX, posY;
+	if (local)
+	{
+		posX = player->getPositionX();
+		posY = player->getPositionY();
+	}
+	else
+	{
+		posX = coPlayer->getPositionX();
+		posY = coPlayer->getPositionY();
+	}
+
 	//std::cout << "Pozycja x: " << posX << ", y: " << posY << std::endl;
 	//std::cout << "Move x: " << posX + moveX << ", y: " << posY + moveY << std::endl;
 	//std::cout << "Pole: " << level->getMapValue(posX + moveX, posY + moveY) << std::endl;
@@ -982,6 +1317,14 @@ bool Game::checkColission(int moveX, int moveY, bool playerFlag)
 	//test czy mozna wejsc na pole
 	if (level->getMapValue(posX + moveX, posY + moveY) != 0 && level->getMapValue(posX + moveX, posY + moveY) != 1)
 	{
+		if (mode == Data::GameMode::MULTIPLAYER)
+		{
+			if (coPlayer->getPositionX() == posX + moveX && coPlayer->getPositionY() == posY + moveY)
+			{
+				return true;
+			}
+		}
+
 		//dla kazdego obiektu typu Crate
 		for (auto c : crates)
 		{
@@ -992,7 +1335,7 @@ bool Game::checkColission(int moveX, int moveY, bool playerFlag)
 				if (playerFlag)
 				{
 					//test czy mozna przesunac obiekt Crate
-					if (!checkColission(2 * moveX, 2 * moveY, false))
+					if (!checkColission(2 * moveX, 2 * moveY, false, local))
 					{
 						//przesuwamy obiekt Crate
 						c->move(moveX, moveY);
@@ -1034,17 +1377,6 @@ bool Game::checkFinish()
 	return false;
 }
 
-/**/
-bool Game::checkNextLevel()
-{
-	std::map<std::string, std::string>::iterator it = Data::getInstance().getLevels().find(currentLevelName);
-	if (std::next(it) != Data::getInstance().getLevels().end())
-	{
-		return true;
-	}
-	return false;
-}
-
 /*If texturesCollector doesn't contain texture with textureName then loads it from file using texturePath.*/
 void Game::loadTexture(const std::string &textureName, const std::string &texturePath)
 {
@@ -1069,72 +1401,21 @@ sf::Texture *Game::getTexture(const std::string &textureName)
 	return textureIterator->second;
 }
 
-void Game::sendPacket(int type)
-{
-	MyPacketData data;
-	switch(type)
-	{
-		case 0:
-			data.type = type;
-			//data.message
-			data.moveX = data.moveY = 0;
-			break;
-		case 1:
-			//
-			break;
-	}
-	sf::Packet packetSend;
-
-}
-
-void Game::recievePacket()
-{
-	while (connected)
-	{
-		MyPacketData data;
-		sf::Packet packetRecieve;
-		if (socket->receive(packetRecieve) == sf::Socket::Disconnected)
-		{
-			std::cout << "Lost connection." << std::endl;
-			socket->disconnect();
-			//clear messages
-			//change status
-			connected = false;
-		}
-		if (packetRecieve >> data)
-		{
-			switch (data.type)
-			{
-			case 0:
-				//message
-				break;
-			case 1:
-				//
-				//
-				break;
-			}
-		}
-	}
-}
-
-void Game::addMessage(const std::string &)
-{
-	//
-}
-
 /*
 29.04 22:51
 Zacmienie mozgu - nie moge sie juz skupic
-ostatnie zmiany w recievePacket
+ostatnie zmiany w receivePacket
 obecny cel:
 - przesylac odpowiednie paczki miedzy hostem a klientem
 w zaleznosci od paczki albo dodawac wiadomosc albo aktualizowac pozycje drugiego gracza
-- problemy z polaczeniem
 
 co trzeba zrobic/przemyslec:
+- Failed to bind listener socket to port 5000
 - wybor poziomu w lobby
 - jak sie bedzie zachowywac gra jezeli bedzie tylko wysylac paczki po wykonaniu ruchu
 - co sie dzieje kiedy po polaczeniu jeden z graczy wyjdzie do/otworzy menu
 - czat w widoku gry MP
 - swoje zycie
 */
+
+//licznik wydarzen - synchronizacja stanu gry wg licznika

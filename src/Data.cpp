@@ -28,13 +28,14 @@ bool Data::loadContent()
 	singleplayerLevels.insert({"Level 09", "level9"});
 	singleplayerLevels.insert({"Level 10", "level10"});
 
+	multiplayerLevels.insert({"Multi 00", "multi0"});
+
 	return true;
 }
 
-std::map<std::string, std::string> &Data::getLevels()
+std::map<std::string, std::string> &Data::getLevels(GameMode mode)
 {
-	LevelsType type = SINGLEPLAYER;
-	switch (type)
+	switch (mode)
 	{
 	case SINGLEPLAYER:
 		return this->singleplayerLevels;
@@ -47,10 +48,9 @@ std::map<std::string, std::string> &Data::getLevels()
 	}
 }
 
-bool Data::nextLevel(const std::string &name)
+bool Data::nextLevel(GameMode mode, const std::string &name)
 {
-	LevelsType type = SINGLEPLAYER;
-	switch (type)
+	switch (mode)
 	{
 	case SINGLEPLAYER:
 		return (std::next(singleplayerLevels.find(name)) != singleplayerLevels.end()) ? true : false;
@@ -59,14 +59,14 @@ bool Data::nextLevel(const std::string &name)
 		return (std::next(multiplayerLevels.find(name)) != multiplayerLevels.end()) ? true : false;
 		break;
 	default:
+		return false;
 		break;
 	}
 }
 
-std::string Data::getNextLevel(const std::string &name)
+std::string Data::getNextLevel(GameMode mode, const std::string &name)
 {
-	LevelsType type = SINGLEPLAYER;
-	switch (type)
+	switch (mode)
 	{
 	case SINGLEPLAYER:
 		return std::next(singleplayerLevels.find(name))->first;

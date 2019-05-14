@@ -15,7 +15,28 @@ public:
 		CLOSE = 0, //Zamykanie aplikacji
 		START = 1, //Start aplikacji
 		MENU = 2,  //Menu
-		GAME = 3   //Gra
+		GAME = 3,  //Gra
+		DISCONNECT = 4
+	};
+
+	enum PacketType //Typy wysylanych pakietow
+	{
+		LEVEL = 0,   //pakiet przesyla nazwe poziomu do zbudowania
+		MESSAGE = 1, //pakiet przesyla wiadomosc
+		MOVE = 2	 //pakiet przesyla ruch
+	};
+
+	enum ConnectionType //Typ polaczenia
+	{
+		HOST = 0,
+		CLIENT = 1
+	};
+
+	struct MyPacketData //Struktura pakietow
+	{
+		std::string type;	//typ pakietu
+		std::string message; //wiadomosc
+		int moveX, moveY;	//ruch
 	};
 
 	static Game &getInstance();
@@ -44,48 +65,46 @@ public:
 	//
 	void waitForClient();
 	bool connectToHost(const std::string &);
+	void disconnect();
+	void receivePacket();
+	void sendPacket(PacketType);
+	void addMessage(const std::string &);
 	//
 	void showGame();
 	void drawGame();
 	//
-	void move(int, int);
-	bool checkColission(int, int, bool);
+	void move(int, int, Player *);
+	bool checkColission(int, int, bool, bool);
 	bool checkFinish();
-	bool checkNextLevel();
 	void loadTexture(const std::string &, const std::string &);
 	sf::Texture *getTexture(const std::string &);
-	void sendPacket(int);
-	void recievePacket();
-	void addMessage(const std::string &);
 
-	struct MyPacketData
-	{
-		int type;
-		std::string message;
-		int moveX, moveY;
-	};
-
-	friend sf::Packet &operator<<(sf::Packet &packet, const Game::MyPacketData &data)
+	//Przeciazony operator do wysylania paczek
+	friend sf::Packet &operator<<(sf::Packet &packet, const MyPacketData &data)
 	{
 		return packet << data.type << data.message << data.moveX << data.moveY;
 	}
-	friend sf::Packet &operator>>(sf::Packet &packet, Game::MyPacketData data)
+	//Przeciazony operator do pobierania paczek
+	friend sf::Packet &operator>>(sf::Packet &packet, MyPacketData &data)
 	{
 		return packet >> data.type >> data.message >> data.moveX >> data.moveY;
 	}
 
 private:
-	GameState state;		 //Obecny stan aplikacji
-	sf::RenderWindow window; //Okno aplikacji
-	sf::View gameView;		 //Widok na gre
-	sf::View menuView;		 //Widok na menu
-	sf::Font font;			 //Czcionka uzywana w aplikacji
+	GameState state;			   //Obecny stan aplikacji
+	ConnectionType connectionType; //Obecny typ polaczenia
+	Data::GameMode mode;		   //Tryb gry
+	sf::RenderWindow window;	   //Okno aplikacji
+	sf::View gameView;			   //Widok na gre
+	sf::View menuView;			   //Widok na menu
+	sf::Font font;				   //Czcionka uzywana w aplikacji
 
-	Menu *menu;		//
-	Level *level;   //
-	Player *player; //
-	Target *target; //
-	Crate *crate;   //gry
+	Menu *menu;		  //Obiekt menu
+	Level *level;	 //obiekt poziomu
+	Player *player;   //obiekt gracza
+	Player *coPlayer; //obiekt drugiego gracza
+	Target *target;   //obiekt celu
+	Crate *crate;	 //obiekt skrzyni
 
 	Game();
 	bool loadContent();
@@ -109,7 +128,11 @@ private:
 	sf::Mutex globalMutex;			  //
 	bool connected;					  //
 
-	std::string inputString;
-	bool inputActive;
-	std::vector<sf::Text> chat;
+	std::vector<sf::Text> *messages; //kontener na wiadomosci chatu
+	std::string inputString;		 //
+	sf::Text inputText;				 //
+	std::string messageSend;		 //
+	int moveX, moveY;				 //
+	bool inputActive;				 //
+	std::vector<sf::Text> chat;		 //
 };

@@ -8,7 +8,7 @@ class Level
 	Level();
 	~Level();
 
-	bool loadContent(const std::string &);
+	bool loadContent(Data::GameMode, const std::string &);
 
 	int getSizeX() { return this->sizeX; }
 	int getSizeY() { return this->sizeY; }

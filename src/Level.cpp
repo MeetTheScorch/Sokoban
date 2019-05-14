@@ -11,10 +11,10 @@ Level::~Level()
 }
 
 /*Wczytywanie poziomu o nazwie name z pliku.*/
-bool Level::loadContent(const std::string &name)
+bool Level::loadContent(Data::GameMode mode, const std::string &name)
 {
 	setLevelName(name);
-	setLevelPath(Data::getInstance().getLevels()[name]);
+	setLevelPath(Data::getInstance().getLevels(mode)[name]);
 
 	std::fstream file;
 	file.open("data/" + path);

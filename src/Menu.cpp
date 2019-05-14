@@ -55,7 +55,7 @@ bool Menu::loadContent()
 		singleMenuText.push_back(t);
 	}
 	/*Wypelnianie singleMenuText nazwami poziomow.*/
-	for (auto l : Data::getInstance().getLevels())
+	for (auto l : Data::getInstance().getLevels(Data::GameMode::SINGLEPLAYER))
 	{
 		sf::Text t;
 		t.setFont(font);
@@ -150,7 +150,7 @@ bool Menu::loadContent()
 		joinMenuText.push_back(t);
 	}
 
-	std::vector<sf::String> lobbyText = {"Lobby", "Menu"};
+	std::vector<sf::String> lobbyText = {"Lobby"};
 	for (auto i = 0u; i < lobbyText.size(); i++)
 	{
 		sf::Text t;
@@ -164,6 +164,23 @@ bool Menu::loadContent()
 			t.setCharacterSize(30);
 		}
 		t.setString(lobbyText[i]);
+		lobbyMenuText.push_back(t);
+	}
+	/*Wypelnianie lobbyMenuText nazwami poziomow.*/
+	for (auto l : Data::getInstance().getLevels(Data::GameMode::MULTIPLAYER))
+	{
+		sf::Text t;
+		t.setFont(font);
+		t.setCharacterSize(25);
+		t.setString(l.first);
+		lobbyMenuText.push_back(t);
+	}
+	/*Dodawanie na sam koniec lobbyMenuText tekstu Back.*/
+	{
+		sf::Text t;
+		t.setFont(font);
+		t.setCharacterSize(30);
+		t.setString("Menu");
 		lobbyMenuText.push_back(t);
 	}
 
@@ -206,99 +223,16 @@ std::vector<sf::Text> &Menu::getMenuText()
 void Menu::setMenuTextPosition(int i, float x, float y)
 {
 	getMenuText()[i].setPosition(x, y);
-
-	/*switch (state)
-	{
-	case MenuState::MAIN:
-		this->mainMenuText[i].setPosition(x, y);
-		break;
-	case MenuState::SINGLE:
-		this->singleMenuText[i].setPosition(x, y);
-		break;
-	case MenuState::MULTI:
-		this->multiMenuText[i].setPosition(x, y);
-		break;
-	case MenuState::INGAME:
-		this->inGameMenuText[i].setPosition(x, y);
-		break;
-	case MenuState::FINISH:
-		this->finishMenuText[i].setPosition(x, y);
-		break;
-	case MenuState::HOST:
-		this->hostMenuText[i].setPosition(x, y);
-		break;
-	case MenuState::JOIN:
-		this->joinMenuText[i].setPosition(x, y);
-		break;
-	case MenuState::LOBBY:
-		this->lobbyMenuText[i].setPosition(x, y);
-		break;
-	}*/
 }
 
 /*Ustawianie koloru tekstu.*/
 void Menu::setMenuTextFillColor(int i, sf::Color color)
 {
 	getMenuText()[i].setFillColor(color);
-
-	/*switch (state)
-	{
-	case MenuState::MAIN:
-		this->mainMenuText[i].setFillColor(color);
-		break;
-	case MenuState::SINGLE:
-		this->singleMenuText[i].setFillColor(color);
-		break;
-	case MenuState::MULTI:
-		this->multiMenuText[i].setFillColor(color);
-		break;
-	case MenuState::INGAME:
-		this->inGameMenuText[i].setFillColor(color);
-		break;
-	case MenuState::FINISH:
-		this->finishMenuText[i].setFillColor(color);
-		break;
-	case MenuState::HOST:
-		this->hostMenuText[i].setFillColor(color);
-		break;
-	case MenuState::JOIN:
-		this->joinMenuText[i].setFillColor(color);
-		break;
-	case MenuState::LOBBY:
-		this->lobbyMenuText[i].setFillColor(color);
-		break;
-	}*/
 }
 
+//Ustawianie tresci tekstu
 void Menu::setMenuTextString(int i, const std::string &str)
 {
 	getMenuText()[i].setString(str);
-
-	/*switch (state)
-	{
-	case MenuState::MAIN:
-		this->mainMenuText[i].setString(str);
-		break;
-	case MenuState::SINGLE:
-		this->singleMenuText[i].setString(str);
-		break;
-	case MenuState::MULTI:
-		this->multiMenuText[i].setString(str);
-		break;
-	case MenuState::INGAME:
-		this->inGameMenuText[i].setString(str);
-		break;
-	case MenuState::FINISH:
-		this->finishMenuText[i].setString(str);
-		break;
-	case MenuState::HOST:
-		this->hostMenuText[i].setString(str);
-		break;
-	case MenuState::JOIN:
-		this->joinMenuText[i].setString(str);
-		break;
-	case MenuState::LOBBY:
-		this->lobbyMenuText[i].setString(str);
-		break;
-	}*/
 }
