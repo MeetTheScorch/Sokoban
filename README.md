@@ -1,5 +1,7 @@
 # Sokoban
 
+Project for bachelor's thesis - NOT FINISHED
+
 Tools:
 
 https://github.com/andrew-r-king/sfml-vscode-boilerplate
